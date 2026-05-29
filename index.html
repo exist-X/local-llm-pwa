@@ -140,8 +140,18 @@
       return div;
     }
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(console.error);
+    if ('serviceWorker' in navigator && 'caches' in window) {
+      navigator.serviceWorker.register('./sw.js')
+        .then(() => {
+          // 頁面載入後主動把自己存進快取，供離線重啟時使用
+          const pageUrl = location.origin + location.pathname;
+          caches.open('local-llm-v7').then(cache =>
+            cache.add(pageUrl)
+              .then(() => console.log('[App] 頁面已快取，可離線使用'))
+              .catch(err => console.warn('[App] 快取失敗:', err))
+          );
+        })
+        .catch(console.error);
     }
 
     loadBtn.addEventListener('click', async () => {

@@ -26,6 +26,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
+  // 只處理 HTTP/HTTPS，跳過 chrome-extension:// 等其他 scheme
+  if (!url.protocol.startsWith('http')) return;
+
   // wllama 模型檔案由 wllama 自己用 OPFS 處理，不攔截
   if (url.hostname.includes('huggingface.co')) return;
 

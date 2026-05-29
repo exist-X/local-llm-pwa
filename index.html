@@ -139,6 +139,10 @@
       return div;
     }
 
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(console.error);
+    }
+
     loadBtn.addEventListener('click', async () => {
       loadBtn.disabled = true;
       progressW.style.display = 'block';

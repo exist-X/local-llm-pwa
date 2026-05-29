@@ -113,9 +113,10 @@
       file: 'tinyllamas/stories260K.gguf',
     };
 
-    const wllama = new Wllama({
-      default: 'https://cdn.jsdelivr.net/npm/@wllama/wllama@3.2.3/esm/wasm/wllama.wasm',
-    });
+    const wllama = new Wllama(
+      { default: 'https://cdn.jsdelivr.net/npm/@wllama/wllama@3.2.3/esm/wasm/wllama.wasm' },
+      { allowOffline: true }
+    );
 
     let generating = false;
     const history = [];

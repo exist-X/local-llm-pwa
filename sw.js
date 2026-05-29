@@ -1,16 +1,18 @@
-const CACHE = 'local-llm-v1';
+const CACHE = 'local-llm-v2';
+const BASE = new URL('./', self.location.href).href;
+const SHELL = [
+  BASE,
+  BASE + 'index.html',
+  BASE + 'manifest.json',
+  BASE + 'icon-192.png',
+  BASE + 'icon-512.png',
+];
 
-// 安裝時快取本地檔案
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(cache =>
-      cache.addAll(['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'])
-    )
-  );
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
   self.skipWaiting();
 });
 
-// 清除舊快取
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -20,27 +22,38 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// 請求策略：本地優先從快取，外部資源（CDN / HuggingFace）用 network-first + 動態快取
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // HuggingFace 模型檔案太大，不快取（wllama 自己用 Cache API 處理）
+  // 模型檔案讓 wllama 自己用 Cache API 處理
   if (url.hostname.includes('huggingface.co')) return;
 
-  e.respondWith(
-    caches.open(CACHE).then(async cache => {
-      const cached = await cache.match(e.request);
-      if (cached) return cached;
+  // navigation 請求（重啟 PWA、重新整理）一律回傳快取的 index.html
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      caches.open(CACHE).then(c =>
+        c.match(BASE + 'index.html').then(cached =>
+          cached || fetch(e.request).then(r => {
+            c.put(BASE + 'index.html', r.clone());
+            return r;
+          })
+        )
+      )
+    );
+    return;
+  }
 
+  // 其他資源：快取優先，沒有才去網路，順便存起來
+  e.respondWith(
+    caches.open(CACHE).then(async c => {
+      const cached = await c.match(e.request);
+      if (cached) return cached;
       try {
-        const response = await fetch(e.request);
-        // 只快取成功的 GET 請求
-        if (e.request.method === 'GET' && response.ok) {
-          cache.put(e.request, response.clone());
-        }
-        return response;
+        const res = await fetch(e.request);
+        if (e.request.method === 'GET' && res.ok) c.put(e.request, res.clone());
+        return res;
       } catch {
-        return cached ?? new Response('離線中，資源未快取', { status: 503 });
+        return new Response('離線中，資源未快取', { status: 503 });
       }
     })
   );

@@ -2,7 +2,7 @@
   "name": "本地 LLM 聊天",
   "short_name": "本地LLM",
   "description": "在瀏覽器本地執行 LLM 的 PWA",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#4a90e2",
   "theme_color": "#4a90e2",

@@ -4,7 +4,7 @@ const CACHE = 'local-llm-v1';
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(cache =>
-      cache.addAll(['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'])
+      cache.addAll(['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'])
     )
   );
   self.skipWaiting();

@@ -1,15 +1,19 @@
-const CACHE = 'local-llm-v4';
+const CACHE = 'local-llm-v5';
 const SCOPE = self.registration.scope;
+
+const SHELL = [
+  SCOPE + 'index.html',
+  SCOPE + 'manifest.json',
+  SCOPE + 'icon-192.png',
+  SCOPE + 'icon-512.png',
+  'https://cdn.jsdelivr.net/npm/@wllama/wllama@3.2.3/esm/index.js',
+  'https://cdn.jsdelivr.net/npm/@wllama/wllama@3.2.3/esm/wasm/wllama.wasm',
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE)
-      .then(c => c.addAll([
-        SCOPE + 'index.html',
-        SCOPE + 'manifest.json',
-        SCOPE + 'icon-192.png',
-        SCOPE + 'icon-512.png',
-      ]))
+      .then(c => c.addAll(SHELL))
       .then(() => self.skipWaiting())
   );
 });
@@ -27,7 +31,6 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (new URL(e.request.url).hostname.includes('huggingface.co')) return;
 
-  // 導航請求（重啟 PWA 的第一個請求）：cache-first，一定不碰網路
   if (e.request.mode === 'navigate') {
     e.respondWith(
       caches.match(SCOPE + 'index.html', { ignoreVary: true })
@@ -40,14 +43,14 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // 其他資源：快取優先，沒有才去網路並動態快取
   e.respondWith(
     caches.match(e.request, { ignoreVary: true })
       .then(cached => {
         if (cached) return cached;
         return fetch(e.request).then(res => {
           if (res.ok && e.request.method === 'GET') {
-            caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+            const cloned = res.clone(); // 先 clone，再 return，避免 body already used
+            caches.open(CACHE).then(c => c.put(e.request, cloned));
           }
           return res;
         });

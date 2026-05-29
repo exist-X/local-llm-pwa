@@ -1,60 +1,67 @@
-const CACHE = 'local-llm-v2';
-const BASE = new URL('./', self.location.href).href;
-const SHELL = [
-  BASE,
-  BASE + 'index.html',
-  BASE + 'manifest.json',
-  BASE + 'icon-192.png',
-  BASE + 'icon-512.png',
-];
+const CACHE = 'local-llm-v3';
+const BASE = self.registration.scope; // e.g. https://exist-x.github.io/local-llm-pwa/
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
-  self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll([
+        BASE,
+        BASE + 'index.html',
+        BASE + 'manifest.json',
+        BASE + 'icon-192.png',
+        BASE + 'icon-512.png',
+      ]))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-
-  // 模型檔案讓 wllama 自己用 Cache API 處理
   if (url.hostname.includes('huggingface.co')) return;
 
-  // navigation 請求（重啟 PWA、重新整理）一律回傳快取的 index.html
+  e.respondWith(handle(e));
+});
+
+async function handle(e) {
+  const cache = await caches.open(CACHE);
+  const OPT = { ignoreVary: true };
+
   if (e.request.mode === 'navigate') {
-    e.respondWith(
-      caches.open(CACHE).then(c =>
-        c.match(BASE + 'index.html').then(cached =>
-          cached || fetch(e.request).then(r => {
-            c.put(BASE + 'index.html', r.clone());
-            return r;
-          })
+    // 網路優先，offline 時從快取找 index.html
+    try {
+      const res = await fetch(e.request);
+      cache.put(e.request, res.clone());
+      return res;
+    } catch {
+      return (
+        await cache.match(BASE + 'index.html', OPT) ||
+        await cache.match(BASE, OPT) ||
+        new Response(
+          '<html><body style="font:1rem system-ui;padding:2rem">' +
+          '<h2>請先連線開啟一次應用程式，以啟用離線功能。</h2></body></html>',
+          { status: 200, headers: { 'Content-Type': 'text/html;charset=utf-8' } }
         )
-      )
-    );
-    return;
+      );
+    }
   }
 
-  // 其他資源：快取優先，沒有才去網路，順便存起來
-  e.respondWith(
-    caches.open(CACHE).then(async c => {
-      const cached = await c.match(e.request);
-      if (cached) return cached;
-      try {
-        const res = await fetch(e.request);
-        if (e.request.method === 'GET' && res.ok) c.put(e.request, res.clone());
-        return res;
-      } catch {
-        return new Response('離線中，資源未快取', { status: 503 });
-      }
-    })
-  );
-});
+  // 其他資源：快取優先
+  const cached = await cache.match(e.request, OPT);
+  if (cached) return cached;
+
+  try {
+    const res = await fetch(e.request);
+    if (e.request.method === 'GET' && res.ok) cache.put(e.request, res.clone());
+    return res;
+  } catch {
+    return new Response('offline', { status: 503 });
+  }
+}
